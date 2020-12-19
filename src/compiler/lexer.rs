@@ -1,29 +1,31 @@
-use std::error::Error;
-use std::fmt;
-
 use lazy_static::lazy_static;
 use regex::Regex;
 
-#[derive(Debug)]
-pub struct SyntaxError {
-    loc: String,
-}
+mod error {
+    use std::error::Error;
+    use std::fmt;
 
-impl SyntaxError {
-    fn new(loc: String) -> Self {
-        SyntaxError{
-            loc
+    #[derive(Debug, PartialEq)]
+    pub struct SyntaxError {
+        loc: String,
+    }
+
+    impl SyntaxError {
+        pub fn new(loc: String) -> Self {
+            SyntaxError{
+                loc
+            }
         }
     }
-}
 
-impl fmt::Display for SyntaxError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Syntax error in {}", self.loc)
+    impl fmt::Display for SyntaxError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "Syntax error in {}", self.loc)
+        }
     }
-}
 
-impl Error for SyntaxError {}
+    impl Error for SyntaxError {}
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -49,7 +51,7 @@ fn char_to_token(c: &char) -> Option<Token> {
     }
 }
 
-fn get_keyword_or_id(input: &str) -> Result<(Token, &str), Box<dyn Error>> {
+fn get_keyword_or_id(input: &str) -> Result<(Token, &str), error::SyntaxError> {
     lazy_static! {
         static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z]\w*").unwrap();
     }
@@ -61,11 +63,11 @@ fn get_keyword_or_id(input: &str) -> Result<(Token, &str), Box<dyn Error>> {
                 other => Token::Identifier(String::from(other)),
             }, &input[m.end()..]
         )),
-        None => Err(SyntaxError::new(String::from(input)).into())
+        None => Err(error::SyntaxError::new(String::from(input)).into())
     }
 }
 
-fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
+fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, error::SyntaxError> {
     lazy_static! {
         static ref INT_REGEX: Regex = Regex::new(r"^[0-9]+").unwrap();
     }
@@ -83,7 +85,7 @@ fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     Ok(res)
 }
 
-pub fn tokenize(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
+pub fn tokenize(input: &str) -> Result<Vec<Token>, error::SyntaxError> {
     match input.chars().next() {
         Some(c) => {
             match char_to_token(&c) {
@@ -207,7 +209,15 @@ mod tests {
     }
 
     #[test]
-    fn function_return_2() {
+    fn syntax_error_with_invalid_identifier() {
+        assert_eq!(
+            tokenize("int $foo() {}").err().unwrap(),
+            error::SyntaxError::new(String::from("$foo() {}"))
+        );
+    }
+
+    #[test]
+    fn file_return_2() {
         let contents = fs::read_to_string("tests/testfiles/return_2.c").unwrap();
         assert_eq!(
             tokenize(&contents).unwrap(),
