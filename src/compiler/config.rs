@@ -13,6 +13,6 @@ impl Config {
             None => return Err("No file path provided"),
         };
 
-        Ok(Config{ filename })
+        Ok(Config { filename })
     }
 }

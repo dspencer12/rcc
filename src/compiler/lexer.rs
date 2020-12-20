@@ -4,31 +4,7 @@ use std::i32;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-mod error {
-    use std::error::Error;
-    use std::fmt;
-
-    #[derive(Debug, PartialEq)]
-    pub enum SyntaxError {
-        Unknown,
-        InvalidIdentifier(String),
-    }
-
-    impl fmt::Display for SyntaxError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                SyntaxError::InvalidIdentifier(id) => {
-                    write!(f, "Syntax Error: Invalid identifier: {}", id)
-                },
-                SyntaxError::Unknown => {
-                    write!(f, "Syntax Error: Unknown error")
-                }
-            }
-        }
-    }
-
-    impl Error for SyntaxError {}
-}
+use super::error::SyntaxError;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -37,8 +13,8 @@ pub enum Token {
     OpenParen,
     CloseParen,
     Semicolon,
-    IntKeyword,
-    Return,
+    IntKw,
+    ReturnKw,
     Identifier(String),
     IntLiteral(i32),
 }
@@ -54,7 +30,7 @@ fn char_to_token(c: &char) -> Option<Token> {
     }
 }
 
-fn get_keyword_or_id(input: &str) -> Result<(Token, &str), error::SyntaxError> {
+fn get_keyword_or_id(input: &str) -> Result<(Token, &str), SyntaxError> {
     lazy_static! {
         static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z]\w*").unwrap();
         static ref INVALID_ID_REGEX: Regex = Regex::new(r"^[^\(\)\{\}\s]+").unwrap();
@@ -62,50 +38,36 @@ fn get_keyword_or_id(input: &str) -> Result<(Token, &str), error::SyntaxError> {
     match ID_REGEX.find(input) {
         Some(m) => Ok((
             match m.as_str() {
-                "int" => Token::IntKeyword,
-                "return" => Token::Return,
+                "int" => Token::IntKw,
+                "return" => Token::ReturnKw,
                 other => Token::Identifier(String::from(other)),
-            }, &input[m.end()..]
+            },
+            &input[m.end()..],
         )),
-        None => {
-            match INVALID_ID_REGEX.find(input) {
-                Some(m) => Err(
-                    error::SyntaxError::InvalidIdentifier(
-                        String::from(m.as_str().split_whitespace().next().unwrap()).into()
-                    )
-                ),
-                None => Err(error::SyntaxError::Unknown)
-            }
-        }
+        None => match INVALID_ID_REGEX.find(input) {
+            Some(m) => Err(SyntaxError::InvalidIdentifier(
+                String::from(m.as_str().split_whitespace().next().unwrap()).into(),
+            )),
+            None => Err(SyntaxError::Unknown),
+        },
     }
 }
 
 fn tokenize_int_literal(input: &str) -> Result<Option<(i32, usize)>, Box<dyn Error>> {
     lazy_static! {
-        static ref INT_REGEX: Regex = Regex::new(r"^(0x[0-9a-fA-F]+)|^(0[0-7]+)|^([0-9]+)").unwrap();
+        static ref INT_REGEX: Regex =
+            Regex::new(r"^(0x[0-9a-fA-F]+)|^(0[0-7]+)|^([0-9]+)").unwrap();
     }
     match INT_REGEX.captures(input) {
-        Some(caps) => {
-            match caps.get(1) {
-                Some(m) => {
-                    Ok(Some((i32::from_str_radix(&m.as_str()[2..], 16)?, m.end())))
+        Some(caps) => match caps.get(1) {
+            Some(m) => Ok(Some((i32::from_str_radix(&m.as_str()[2..], 16)?, m.end()))),
+            None => match caps.get(2) {
+                Some(m) => Ok(Some((i32::from_str_radix(&m.as_str()[1..], 8)?, m.end()))),
+                None => match caps.get(3) {
+                    Some(m) => Ok(Some((m.as_str().parse()?, m.end()))),
+                    None => Ok(None),
                 },
-                None => {
-                    match caps.get(2) {
-                        Some(m) => {
-                            Ok(Some((i32::from_str_radix(&m.as_str()[1..], 8)?, m.end())))
-                        },
-                        None => {
-                            match caps.get(3) {
-                                Some(m) => {
-                                    Ok(Some((m.as_str().parse()?, m.end())))
-                                },
-                                None => Ok(None),
-                            }
-                        }
-                    }
-                }
-            }
+            },
         },
         None => Ok(None),
     }
@@ -118,7 +80,7 @@ fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
             let mut res = vec![Token::IntLiteral(num)];
             res.extend(tokenize(&input[end..])?);
             return Ok(res);
-        },
+        }
         None => (),
     }
     let (t, input) = get_keyword_or_id(input)?;
@@ -129,19 +91,17 @@ fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     match input.chars().next() {
-        Some(c) => {
-            match char_to_token(&c) {
-                Some(t) => {
-                    let mut tokens = vec![t];
-                    tokens.extend(tokenize(&input[1..])?);
-                    Ok(tokens)
-                },
-                None => {
-                    if c.is_whitespace() {
-                        tokenize(&input[1..])
-                    } else {
-                        tokenize_const_or_id(input)
-                    }
+        Some(c) => match char_to_token(&c) {
+            Some(t) => {
+                let mut tokens = vec![t];
+                tokens.extend(tokenize(&input[1..])?);
+                Ok(tokens)
+            }
+            None => {
+                if c.is_whitespace() {
+                    tokenize(&input[1..])
+                } else {
+                    tokenize_const_or_id(input)
                 }
             }
         },
@@ -153,8 +113,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
 mod tests {
     use std::fs;
 
-    use super::*;
     use super::Token::*;
+    use super::*;
 
     #[test]
     fn decimal_literals() {
@@ -198,15 +158,15 @@ mod tests {
 
     #[test]
     fn basic_keywords() {
-        assert_eq!(tokenize("int").unwrap(), vec![IntKeyword]);
-        assert_eq!(tokenize("return").unwrap(), vec![Return]);
+        assert_eq!(tokenize("int").unwrap(), vec![IntKw]);
+        assert_eq!(tokenize("return").unwrap(), vec![ReturnKw]);
     }
 
     #[test]
     fn return_statement() {
         assert_eq!(
             tokenize("return 0;").unwrap(),
-            vec![Return, IntLiteral(0), Semicolon]
+            vec![ReturnKw, IntLiteral(0), Semicolon]
         );
     }
 
@@ -215,11 +175,11 @@ mod tests {
         assert_eq!(
             tokenize("int foo() {}").unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("foo")), 
-                OpenParen, 
-                CloseParen, 
-                OpenBrace, 
+                IntKw,
+                Identifier(String::from("foo")),
+                OpenParen,
+                CloseParen,
+                OpenBrace,
                 CloseBrace
             ]
         );
@@ -230,11 +190,11 @@ mod tests {
         assert_eq!(
             tokenize("int foo() {\n}").unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("foo")), 
-                OpenParen, 
-                CloseParen, 
-                OpenBrace, 
+                IntKw,
+                Identifier(String::from("foo")),
+                OpenParen,
+                CloseParen,
+                OpenBrace,
                 CloseBrace
             ]
         );
@@ -245,12 +205,12 @@ mod tests {
         assert_eq!(
             tokenize("int foo() {\n\treturn 0;\n}").unwrap(),
             vec![
-                IntKeyword,
+                IntKw,
                 Identifier(String::from("foo")),
                 OpenParen,
                 CloseParen,
                 OpenBrace,
-                Return,
+                ReturnKw,
                 IntLiteral(0),
                 Semicolon,
                 CloseBrace
@@ -261,8 +221,12 @@ mod tests {
     #[test]
     fn syntax_error_with_invalid_identifier() {
         assert_eq!(
-            *tokenize("int $foo() {}").err().unwrap().downcast::<error::SyntaxError>().unwrap(),
-            error::SyntaxError::InvalidIdentifier(String::from("$foo"))
+            *tokenize("int $foo() {}")
+                .err()
+                .unwrap()
+                .downcast::<SyntaxError>()
+                .unwrap(),
+            SyntaxError::InvalidIdentifier(String::from("$foo"))
         );
     }
 
@@ -272,14 +236,14 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(2), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(2),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -291,14 +255,14 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(100), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(100),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -310,14 +274,14 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(0), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(0),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -329,14 +293,14 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(0), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(0),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -348,14 +312,14 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(0), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(0),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -367,14 +331,14 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(0), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(0),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -386,13 +350,13 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
-                OpenBrace, 
-                Return, 
-                IntLiteral(0), 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                IntLiteral(0),
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -404,13 +368,13 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
-                Semicolon, 
+                OpenBrace,
+                ReturnKw,
+                Semicolon,
                 CloseBrace
             ]
         );
@@ -418,16 +382,17 @@ mod tests {
 
     #[test]
     fn file_missing_closing_brace() {
-        let contents = fs::read_to_string("tests/testfiles/invalid/missing_closing_brace.c").unwrap();
+        let contents =
+            fs::read_to_string("tests/testfiles/invalid/missing_closing_brace.c").unwrap();
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
+                OpenBrace,
+                ReturnKw,
                 IntLiteral(0),
                 Semicolon,
             ]
@@ -440,12 +405,12 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
-                Return, 
+                OpenBrace,
+                ReturnKw,
                 IntLiteral(0),
                 CloseBrace,
             ]
@@ -454,15 +419,16 @@ mod tests {
 
     #[test]
     fn file_missing_return_space() {
-        let contents = fs::read_to_string("tests/testfiles/invalid/missing_return_space.c").unwrap();
+        let contents =
+            fs::read_to_string("tests/testfiles/invalid/missing_return_space.c").unwrap();
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
+                OpenBrace,
                 Identifier(String::from("return0")),
                 Semicolon,
                 CloseBrace,
@@ -476,11 +442,11 @@ mod tests {
         assert_eq!(
             tokenize(&contents).unwrap(),
             vec![
-                IntKeyword, 
-                Identifier(String::from("main")), 
+                IntKw,
+                Identifier(String::from("main")),
                 OpenParen,
                 CloseParen,
-                OpenBrace, 
+                OpenBrace,
                 Identifier(String::from("RETURN")),
                 IntLiteral(0),
                 Semicolon,
