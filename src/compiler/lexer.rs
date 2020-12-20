@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::i32;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -6,21 +9,21 @@ mod error {
     use std::fmt;
 
     #[derive(Debug, PartialEq)]
-    pub struct SyntaxError {
-        loc: String,
-    }
-
-    impl SyntaxError {
-        pub fn new(loc: String) -> Self {
-            SyntaxError{
-                loc
-            }
-        }
+    pub enum SyntaxError {
+        Unknown,
+        InvalidIdentifier(String),
     }
 
     impl fmt::Display for SyntaxError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "Syntax error in {}", self.loc)
+            match self {
+                SyntaxError::InvalidIdentifier(id) => {
+                    write!(f, "Syntax Error: Invalid identifier: {}", id)
+                },
+                SyntaxError::Unknown => {
+                    write!(f, "Syntax Error: Unknown error")
+                }
+            }
         }
     }
 
@@ -54,6 +57,7 @@ fn char_to_token(c: &char) -> Option<Token> {
 fn get_keyword_or_id(input: &str) -> Result<(Token, &str), error::SyntaxError> {
     lazy_static! {
         static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z]\w*").unwrap();
+        static ref INVALID_ID_REGEX: Regex = Regex::new(r"^[^\(\)\{\}\s]+").unwrap();
     }
     match ID_REGEX.find(input) {
         Some(m) => Ok((
@@ -63,29 +67,67 @@ fn get_keyword_or_id(input: &str) -> Result<(Token, &str), error::SyntaxError> {
                 other => Token::Identifier(String::from(other)),
             }, &input[m.end()..]
         )),
-        None => Err(error::SyntaxError::new(String::from(input)).into())
+        None => {
+            match INVALID_ID_REGEX.find(input) {
+                Some(m) => Err(
+                    error::SyntaxError::InvalidIdentifier(
+                        String::from(m.as_str().split_whitespace().next().unwrap()).into()
+                    )
+                ),
+                None => Err(error::SyntaxError::Unknown)
+            }
+        }
     }
 }
 
-fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, error::SyntaxError> {
+fn tokenize_int_literal(input: &str) -> Result<Option<(i32, usize)>, Box<dyn Error>> {
     lazy_static! {
-        static ref INT_REGEX: Regex = Regex::new(r"^[0-9]+").unwrap();
+        static ref INT_REGEX: Regex = Regex::new(r"^(0x[0-9a-fA-F]+)|^(0[0-9]+)|^([0-9]+)").unwrap();
     }
-    match INT_REGEX.find(input) {
-        Some(m) => {
-            let mut res = vec![Token::IntLiteral(m.as_str().parse().unwrap())];
-            res.extend(tokenize(&input[m.end()..])?);
-            return Ok(res)
+    match INT_REGEX.captures(input) {
+        Some(caps) => {
+            match caps.get(1) {
+                Some(m) => {
+                    Ok(Some((i32::from_str_radix(&m.as_str()[2..], 16)?, m.end())))
+                },
+                None => {
+                    match caps.get(2) {
+                        Some(m) => {
+                            Ok(Some((i32::from_str_radix(&m.as_str()[1..], 8)?, m.end())))
+                        },
+                        None => {
+                            match caps.get(3) {
+                                Some(m) => {
+                                    Ok(Some((m.as_str().parse()?, m.end())))
+                                },
+                                None => Ok(None),
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        None => Ok(None),
+    }
+}
+
+fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
+    let int_match = tokenize_int_literal(input)?;
+    match int_match {
+        Some((num, end)) => {
+            let mut res = vec![Token::IntLiteral(num)];
+            res.extend(tokenize(&input[end..])?);
+            return Ok(res);
         },
         None => (),
-    };
+    }
     let (t, input) = get_keyword_or_id(input)?;
     let mut res = vec![t];
     res.extend(tokenize(&input)?);
     Ok(res)
 }
 
-pub fn tokenize(input: &str) -> Result<Vec<Token>, error::SyntaxError> {
+pub fn tokenize(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     match input.chars().next() {
         Some(c) => {
             match char_to_token(&c) {
@@ -115,21 +157,26 @@ mod tests {
     use super::Token::*;
 
     #[test]
-    fn int_literals() {
+    fn decimal_literals() {
         for i in 0..11 {
-            assert_eq!(
-                tokenize(&i.to_string()).unwrap(),
-                vec![IntLiteral(i)]
-            );
+            assert_eq!(tokenize(&i.to_string()).unwrap(), vec![IntLiteral(i)]);
         }
     }
 
     #[test]
-    fn int_literals_line_breaks() {
+    fn decimal_literals_line_breaks() {
         assert_eq!(
             tokenize("1\n2\n3\n").unwrap(),
             vec![IntLiteral(1), IntLiteral(2), IntLiteral(3)]
         );
+    }
+
+    #[test]
+    fn hex_literals() {
+        assert_eq!(tokenize("0x1").unwrap(), vec![IntLiteral(1)]);
+        assert_eq!(tokenize("0xa").unwrap(), vec![IntLiteral(10)]);
+        assert_eq!(tokenize("0xB").unwrap(), vec![IntLiteral(11)]);
+        assert_eq!(tokenize("0xABC").unwrap(), vec![IntLiteral(2748)]);
     }
 
     #[test]
@@ -142,14 +189,8 @@ mod tests {
 
     #[test]
     fn basic_keywords() {
-        assert_eq!(
-            tokenize("int").unwrap(),
-            vec![IntKeyword]
-        );
-        assert_eq!(
-            tokenize("return").unwrap(),
-            vec![Return]
-        );
+        assert_eq!(tokenize("int").unwrap(), vec![IntKeyword]);
+        assert_eq!(tokenize("return").unwrap(), vec![Return]);
     }
 
     #[test]
@@ -211,8 +252,8 @@ mod tests {
     #[test]
     fn syntax_error_with_invalid_identifier() {
         assert_eq!(
-            tokenize("int $foo() {}").err().unwrap(),
-            error::SyntaxError::new(String::from("$foo() {}"))
+            *tokenize("int $foo() {}").err().unwrap().downcast::<error::SyntaxError>().unwrap(),
+            error::SyntaxError::InvalidIdentifier(String::from("$foo"))
         );
     }
 
