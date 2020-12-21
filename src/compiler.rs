@@ -18,7 +18,7 @@ fn replace_ext(input: &PathBuf, new_ext: &str) -> PathBuf {
 }
 
 fn get_temp_assembly_file(input_file: &PathBuf) -> PathBuf {
-    replace_ext(input_file, ".s")
+    replace_ext(input_file, "s")
 }
 
 fn get_exe_file(input_file: &PathBuf) -> PathBuf {
@@ -88,10 +88,10 @@ mod tests {
     #[test]
     fn exe_file_names() {
         let cases = [
-            ("test.c", "test.s"),
-            ("mydir/src.c", "mydir/src.s"),
-            ("src.c.c", "src.c.s"),
-            ("/my/abs/path/to/file.c", "/my/abs/path/to/file.s"),
+            ("test.c", "test"),
+            ("mydir/src.c", "mydir/src"),
+            ("src.c.c", "src.c"),
+            ("/my/abs/path/to/file.c", "/my/abs/path/to/file"),
         ];
         for (input, output) in &cases {
             assert_eq!(
