@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs;
 
+mod ast;
 pub mod config;
 mod error;
 mod lexer;

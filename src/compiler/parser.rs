@@ -1,23 +1,8 @@
 use std::error::Error;
 
+use super::ast::{ASTExpression, ASTStatement, AST};
 use super::error::SyntaxError;
 use super::lexer::Token;
-
-#[derive(Debug, PartialEq)]
-pub enum ASTExpression {
-    Literal(i32),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ASTStatement {
-    Return(ASTExpression),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum AST {
-    Function(String, ASTStatement),
-    Program(Box<AST>),
-}
 
 fn parse_expression<'a, I>(tokens: &mut I) -> Option<ASTExpression>
 where
