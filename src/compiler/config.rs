@@ -14,6 +14,8 @@ impl Config {
             None => return Err("No file path provided"),
         };
 
-        Ok(Config { filename: PathBuf::from(filename) })
+        Ok(Config {
+            filename: PathBuf::from(filename),
+        })
     }
 }

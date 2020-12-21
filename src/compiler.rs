@@ -40,7 +40,7 @@ pub fn compile(config: &config::Config) -> Result<(), Box<dyn Error>> {
     let exe_path = get_exe_file(&config.filename);
     let exe_file = match exe_path.to_str() {
         Some(p) => p,
-        None => return Err("Failed to parse path".into())
+        None => return Err("Failed to parse path".into()),
     };
 
     // Execute gcc to compile the assembly to machine code and link
@@ -94,10 +94,7 @@ mod tests {
             ("/my/abs/path/to/file.c", "/my/abs/path/to/file"),
         ];
         for (input, output) in &cases {
-            assert_eq!(
-                get_exe_file(&PathBuf::from(input)),
-                PathBuf::from(output)
-            );
+            assert_eq!(get_exe_file(&PathBuf::from(input)), PathBuf::from(output));
         }
     }
 }
