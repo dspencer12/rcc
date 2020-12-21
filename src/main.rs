@@ -10,8 +10,10 @@ fn main() {
         process::exit(1);
     });
 
-    if let Err(e) = compiler::run(config) {
+    if let Err(e) = compiler::run(&config) {
         eprintln!("Compilation error: {}", e);
         process::exit(1);
     }
+
+    println!("Compilation complete.");
 }
