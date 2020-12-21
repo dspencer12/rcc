@@ -9,7 +9,8 @@ pub fn generate(ast: &AST) -> Result<String, &'static str> {
                         ".global _{}
 _{}:
   movl    ${}, %eax
-  ret",
+  ret
+",
                         id, id, n
                     )),
                 },
@@ -38,7 +39,8 @@ mod tests {
             ".global _foo
 _foo:
   movl    $0, %eax
-  ret"
+  ret
+"
         );
     }
 }
