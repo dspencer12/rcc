@@ -1,7 +1,8 @@
 use std::env;
+use std::path::PathBuf;
 
 pub struct Config {
-    pub filename: String,
+    pub filename: PathBuf,
 }
 
 impl Config {
@@ -13,6 +14,6 @@ impl Config {
             None => return Err("No file path provided"),
         };
 
-        Ok(Config { filename })
+        Ok(Config { filename: PathBuf::from(filename) })
     }
 }

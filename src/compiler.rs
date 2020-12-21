@@ -1,10 +1,8 @@
 use std::error::Error;
 use std::fs;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::process::Command;
-
-use lazy_static::lazy_static;
-use regex::Regex;
 
 mod assembly;
 mod ast;
@@ -13,21 +11,21 @@ mod error;
 mod lexer;
 mod parser;
 
-fn get_temp_assembly_file(input_file: &str) -> String {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"\.c$").unwrap();
-    }
-    String::from(RE.replace(input_file, ".s"))
+fn replace_ext(input: &PathBuf, new_ext: &str) -> PathBuf {
+    let mut new_path = input.clone();
+    new_path.set_extension(new_ext);
+    new_path
 }
 
-fn get_exe_file(input_file: &str) -> String {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"\.c$").unwrap();
-    }
-    String::from(RE.replace(input_file, ""))
+fn get_temp_assembly_file(input_file: &PathBuf) -> PathBuf {
+    replace_ext(input_file, ".s")
 }
 
-pub fn run(config: &config::Config) -> Result<(), Box<dyn Error>> {
+fn get_exe_file(input_file: &PathBuf) -> PathBuf {
+    replace_ext(input_file, "")
+}
+
+pub fn compile(config: &config::Config) -> Result<(), Box<dyn Error>> {
     println!("Starting compilation...");
 
     let contents = fs::read_to_string(&config.filename)?;
@@ -39,7 +37,11 @@ pub fn run(config: &config::Config) -> Result<(), Box<dyn Error>> {
     let output_file = get_temp_assembly_file(&config.filename);
     fs::write(&output_file, code)?;
 
-    let exe_file = get_exe_file(&config.filename);
+    let exe_path = get_exe_file(&config.filename);
+    let exe_file = match exe_path.to_str() {
+        Some(p) => p,
+        None => return Err("Failed to parse path".into())
+    };
 
     // Execute gcc to compile the assembly to machine code and link
     let output = Command::new("gcc")
@@ -69,23 +71,33 @@ mod tests {
 
     #[test]
     fn assembly_file_names() {
-        assert_eq!(get_temp_assembly_file("test.c"), "test.s");
-        assert_eq!(get_temp_assembly_file("mydir/src.c"), "mydir/src.s");
-        assert_eq!(get_temp_assembly_file("src.c.c"), "src.c.s");
-        assert_eq!(
-            get_temp_assembly_file("/my/abs/path/to/file.c"),
-            "/my/abs/path/to/file.s"
-        );
+        let cases = [
+            ("test.c", "test.s"),
+            ("mydir/src.c", "mydir/src.s"),
+            ("src.c.c", "src.c.s"),
+            ("/my/abs/path/to/file.c", "/my/abs/path/to/file.s"),
+        ];
+        for (input, output) in &cases {
+            assert_eq!(
+                get_temp_assembly_file(&PathBuf::from(input)),
+                PathBuf::from(output)
+            );
+        }
     }
 
     #[test]
     fn exe_file_names() {
-        assert_eq!(get_exe_file("test.c"), "test");
-        assert_eq!(get_exe_file("mydir/src.c"), "mydir/src");
-        assert_eq!(get_exe_file("src.c.c"), "src.c");
-        assert_eq!(
-            get_exe_file("/my/abs/path/to/file.c"),
-            "/my/abs/path/to/file"
-        );
+        let cases = [
+            ("test.c", "test.s"),
+            ("mydir/src.c", "mydir/src.s"),
+            ("src.c.c", "src.c.s"),
+            ("/my/abs/path/to/file.c", "/my/abs/path/to/file.s"),
+        ];
+        for (input, output) in &cases {
+            assert_eq!(
+                get_exe_file(&PathBuf::from(input)),
+                PathBuf::from(output)
+            );
+        }
     }
 }
