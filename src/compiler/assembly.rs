@@ -6,7 +6,7 @@ pub fn generate(ast: &AST) -> Result<String, &'static str> {
             AST::Function(id, statement) => match statement {
                 ASTStatement::Return(e) => match e {
                     ASTExpression::Literal(n) => Ok(format!(
-                        ".global _{}
+                        ".globl _{}
 _{}:
   movl    ${}, %eax
   ret
@@ -36,7 +36,7 @@ mod tests {
         );
         assert_eq!(
             generate(&ast).unwrap(),
-            ".global _foo
+            ".globl _foo
 _foo:
   movl    $0, %eax
   ret
