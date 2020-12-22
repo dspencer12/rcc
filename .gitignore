@@ -1,1 +1,13 @@
-/target
+## The following three patterns collectively implement ignoring files without extensions (e.g. binaries)
+
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
+## Additional ignores
+target/
