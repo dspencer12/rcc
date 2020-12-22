@@ -6,9 +6,10 @@ use std::process::{Command, Output};
 use tempfile::NamedTempFile;
 
 extern crate rcc;
-use rcc::compiler::{self, config::Config};
+use rcc::compiler::{self, config::Config, error::SyntaxError};
 
 const VALID_TEST_DIR: &str = "tests/testfiles/valid";
+const INVALID_TEST_DIR: &str = "tests/testfiles/invalid";
 
 fn execute(file: &Path) -> io::Result<Output> {
     Command::new(file.to_str().expect("Failed to convert path to string")).output()
@@ -56,4 +57,40 @@ file_compilation_tests! {
     multi_digit: "multi_digit.c",
     return_0: "return_0.c",
     return_2: "return_2.c",
+}
+
+macro_rules! assert_raises_syntax_error {
+    ($left:expr, $err:expr) => {
+        assert_eq!(
+            *$left.err().unwrap().downcast::<SyntaxError>().unwrap(),
+            $err
+        );
+    };
+}
+
+macro_rules! file_error_tests {
+    ($($name:ident: ($test_file:expr, $err:expr),)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let mut path = PathBuf::from(INVALID_TEST_DIR);
+                path.push($test_file);
+                let config = Config{ filename: path.clone() };
+
+                assert_raises_syntax_error!(
+                    compiler::compile(&config),
+                    $err
+                );
+            }
+        )*
+    }
+}
+
+file_error_tests! {
+    missing_closing_brace: ("missing_closing_brace.c", SyntaxError::MissingCloseBrace),
+    missing_paren: ("missing_paren.c", SyntaxError::MissingCloseParen),
+    missing_return_space: ("missing_return_space.c", SyntaxError::UnexpectedToken),
+    missing_return_val: ("missing_return_val.c", SyntaxError::InvalidExpression),
+    missing_semicolon: ("missing_semicolon.c", SyntaxError::MissingSemicolon),
+    wrong_return_case: ("wrong_return_case.c", SyntaxError::UnexpectedToken),
 }

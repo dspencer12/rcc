@@ -7,7 +7,7 @@ use std::process::Command;
 mod assembly;
 mod ast;
 pub mod config;
-mod error;
+pub mod error;
 mod lexer;
 mod parser;
 
