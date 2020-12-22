@@ -1,27 +1,29 @@
 use std::error::Error;
 
-use super::ast::{ASTExpression, ASTStatement, AST};
+use super::ast;
 use super::error::SyntaxError;
 use super::lexer::Token;
 
-fn parse_expression<'a, I>(tokens: &mut I) -> Option<ASTExpression>
+fn parse_expression<'a, I>(tokens: &mut I) -> Option<ast::Node>
 where
     I: Iterator<Item = &'a Token>,
 {
     match tokens.next() {
-        Some(Token::IntLiteral(n)) => Some(ASTExpression::Literal(*n)),
+        Some(Token::IntLiteral(n)) => Some(ast::Node::Expression(ast::Expr::IntLiteral(*n))),
         _ => None,
     }
 }
 
-fn parse_statement<'a, I>(tokens: &mut I) -> Result<ASTStatement, Box<dyn Error>>
+fn parse_statement<'a, I>(tokens: &mut I) -> Result<ast::Node, Box<dyn Error>>
 where
     I: Iterator<Item = &'a Token>,
 {
     match tokens.next() {
         Some(Token::ReturnKw) => match parse_expression(tokens) {
             Some(e) => match tokens.next() {
-                Some(Token::Semicolon) => Ok(ASTStatement::Return(e)),
+                Some(Token::Semicolon) => {
+                    Ok(ast::Node::Statement(ast::Statement::Return, e.into()))
+                }
                 _ => Err(SyntaxError::MissingSemicolon.into()),
             },
             None => Err(SyntaxError::InvalidExpression.into()),
@@ -30,7 +32,7 @@ where
     }
 }
 
-fn parse_function<'a, I>(tokens: &mut I) -> Result<AST, Box<dyn Error>>
+fn parse_function<'a, I>(tokens: &mut I) -> Result<ast::Node, Box<dyn Error>>
 where
     I: Iterator<Item = &'a Token>,
 {
@@ -42,7 +44,9 @@ where
                         Some(Token::OpenBrace) => {
                             let s = parse_statement(tokens)?;
                             match tokens.next() {
-                                Some(Token::CloseBrace) => Ok(AST::Function(String::from(id), s)),
+                                Some(Token::CloseBrace) => {
+                                    Ok(ast::Node::Function(String::from(id), s.into()))
+                                }
                                 _ => Err(SyntaxError::MissingCloseBrace.into()),
                             }
                         }
@@ -58,8 +62,10 @@ where
     }
 }
 
-pub fn parse(tokens: &Vec<Token>) -> Result<AST, Box<dyn Error>> {
-    Ok(AST::Program(parse_function(&mut tokens.iter())?.into()))
+pub fn parse(tokens: &Vec<Token>) -> Result<ast::Node, Box<dyn Error>> {
+    Ok(ast::Node::Program(
+        parse_function(&mut tokens.iter())?.into(),
+    ))
 }
 
 #[cfg(test)]
@@ -71,7 +77,7 @@ mod tests {
     fn int_literal() {
         assert_eq!(
             parse_expression(&mut vec![IntLiteral(1)].iter()).unwrap(),
-            ASTExpression::Literal(1)
+            ast::Node::Expression(ast::Expr::IntLiteral(1))
         );
     }
 
@@ -79,7 +85,10 @@ mod tests {
     fn return_statement() {
         assert_eq!(
             parse_statement(&mut vec![ReturnKw, IntLiteral(0), Semicolon].iter()).unwrap(),
-            ASTStatement::Return(ASTExpression::Literal(0))
+            ast::Node::Statement(
+                ast::Statement::Return,
+                ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+            )
         );
     }
 
@@ -102,9 +111,12 @@ mod tests {
                 .iter()
             )
             .unwrap(),
-            AST::Function(
+            ast::Node::Function(
                 func_name.clone(),
-                ASTStatement::Return(ASTExpression::Literal(0))
+                ast::Node::Statement(
+                    ast::Statement::Return,
+                    ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+                ).into()
             )
         );
     }
@@ -125,20 +137,31 @@ mod tests {
                 CloseBrace
             ])
             .unwrap(),
-            AST::Program(
-                AST::Function(
+            ast::Node::Program(
+                ast::Node::Function(
                     func_name.clone(),
-                    ASTStatement::Return(ASTExpression::Literal(0))
-                )
-                .into()
+                    ast::Node::Statement(
+                        ast::Statement::Return,
+                        ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+                    ).into()
+                ).into()
             )
         );
     }
 
+    macro_rules! assert_raises_syntax_error {
+        ($left:expr, $err:expr) => {
+            assert_eq!(
+                *$left.err().unwrap().downcast::<SyntaxError>().unwrap(),
+                $err
+            );
+        };
+    }
+
     #[test]
     fn function_missing_closing_brace() {
-        assert_eq!(
-            *parse(&vec![
+        assert_raises_syntax_error!(
+            parse(&vec![
                 IntKw,
                 Identifier(String::from("foo")),
                 OpenParen,
@@ -147,19 +170,15 @@ mod tests {
                 ReturnKw,
                 IntLiteral(0),
                 Semicolon
-            ])
-            .err()
-            .unwrap()
-            .downcast::<SyntaxError>()
-            .unwrap(),
+            ]),
             SyntaxError::MissingCloseBrace
         );
     }
 
     #[test]
     fn function_missing_closing_paren() {
-        assert_eq!(
-            *parse(&vec![
+        assert_raises_syntax_error!(
+            parse(&vec![
                 IntKw,
                 Identifier(String::from("foo")),
                 OpenParen,
@@ -168,19 +187,15 @@ mod tests {
                 IntLiteral(0),
                 Semicolon,
                 CloseBrace,
-            ])
-            .err()
-            .unwrap()
-            .downcast::<SyntaxError>()
-            .unwrap(),
+            ]),
             SyntaxError::MissingCloseParen
         );
     }
 
     #[test]
     fn function_missing_closing_paren_and_brace() {
-        assert_eq!(
-            *parse(&vec![
+        assert_raises_syntax_error!(
+            parse(&vec![
                 IntKw,
                 Identifier(String::from("foo")),
                 OpenParen,
@@ -188,19 +203,15 @@ mod tests {
                 ReturnKw,
                 IntLiteral(0),
                 Semicolon,
-            ])
-            .err()
-            .unwrap()
-            .downcast::<SyntaxError>()
-            .unwrap(),
+            ]),
             SyntaxError::MissingCloseParen
         );
     }
 
     #[test]
     fn function_missing_return_value() {
-        assert_eq!(
-            *parse(&vec![
+        assert_raises_syntax_error!(
+            parse(&vec![
                 IntKw,
                 Identifier(String::from("foo")),
                 OpenParen,
@@ -209,19 +220,15 @@ mod tests {
                 ReturnKw,
                 Semicolon,
                 CloseBrace,
-            ])
-            .err()
-            .unwrap()
-            .downcast::<SyntaxError>()
-            .unwrap(),
+            ]),
             SyntaxError::InvalidExpression
         );
     }
 
     #[test]
     fn function_missing_semicolon() {
-        assert_eq!(
-            *parse(&vec![
+        assert_raises_syntax_error!(
+            parse(&vec![
                 IntKw,
                 Identifier(String::from("foo")),
                 OpenParen,
@@ -230,11 +237,7 @@ mod tests {
                 ReturnKw,
                 IntLiteral(5),
                 CloseBrace,
-            ])
-            .err()
-            .unwrap()
-            .downcast::<SyntaxError>()
-            .unwrap(),
+            ]),
             SyntaxError::MissingSemicolon
         );
     }

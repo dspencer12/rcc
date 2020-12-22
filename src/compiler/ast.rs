@@ -1,51 +1,53 @@
 use std::fmt;
 
 #[derive(Debug, PartialEq)]
-pub enum ASTExpression {
-    Literal(i32),
+pub enum Node {
+    Program(Box<Node>),
+    Function(String, Box<Node>),
+    Statement(Statement, Box<Node>),
+    Expression(Expr),
 }
 
-impl fmt::Display for ASTExpression {
+impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Literal(n) => write!(f, "Int<{}>", n),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ASTStatement {
-    Return(ASTExpression),
-}
-
-impl fmt::Display for ASTStatement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Return(e) => write!(f, "RETURN {}", e),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum AST {
-    Function(String, ASTStatement),
-    Program(Box<AST>),
-}
-
-impl fmt::Display for AST {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Function(name, body) => {
-                write!(
-                    f,
-                    "FUN INT {}:
+            Self::Program(ast) => write!(f, "{}", *ast),
+            Self::Function(name, node) => write!(
+                f,
+                "FUN INT {}:
     params: ()
     body:
         {}",
-                    name, body
-                )
-            }
-            Self::Program(ast) => write!(f, "{}", *ast),
+                name, node
+            ),
+            Self::Statement(s, node) => write!(f, "{} {}", s, node),
+            Self::Expression(expr) => write!(f, "{}", expr),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Statement {
+    Return,
+}
+
+impl fmt::Display for Statement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Return => write!(f, "RETURN"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Expr {
+    IntLiteral(i32),
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IntLiteral(n) => write!(f, "Int<{}>", n),
         }
     }
 }
@@ -56,13 +58,19 @@ mod tests {
 
     #[test]
     fn display_int_literal() {
-        assert_eq!(format!("{}", ASTExpression::Literal(1)), "Int<1>");
+        assert_eq!(format!("{}", Expr::IntLiteral(1)), "Int<1>");
     }
 
     #[test]
     fn display_return_statement() {
         assert_eq!(
-            format!("{}", ASTStatement::Return(ASTExpression::Literal(0))),
+            format!(
+                "{}",
+                Node::Statement(
+                    Statement::Return,
+                    Node::Expression(Expr::IntLiteral(0)).into()
+                )
+            ),
             "RETURN Int<0>"
         );
     }
@@ -72,9 +80,13 @@ mod tests {
         assert_eq!(
             format!(
                 "{}",
-                AST::Function(
+                Node::Function(
                     String::from("foo"),
-                    ASTStatement::Return(ASTExpression::Literal(10))
+                    Node::Statement(
+                        Statement::Return,
+                        Node::Expression(Expr::IntLiteral(10)).into()
+                    )
+                    .into()
                 )
             ),
             "FUN INT foo:
@@ -89,10 +101,14 @@ mod tests {
         assert_eq!(
             format!(
                 "{}",
-                AST::Program(
-                    AST::Function(
+                Node::Program(
+                    Node::Function(
                         String::from("foo"),
-                        ASTStatement::Return(ASTExpression::Literal(10))
+                        Node::Statement(
+                            Statement::Return,
+                            Node::Expression(Expr::IntLiteral(10)).into()
+                        )
+                        .into()
                     )
                     .into()
                 )

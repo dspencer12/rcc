@@ -1,19 +1,27 @@
-use super::ast::{ASTExpression, ASTStatement, AST};
+use super::ast;
 
-pub fn generate(ast: &AST) -> Result<String, &'static str> {
+pub fn generate(ast: &ast::Node) -> Result<String, &'static str> {
     match ast {
-        AST::Program(node) => match &**node {
-            AST::Function(id, statement) => match statement {
-                ASTStatement::Return(e) => match e {
-                    ASTExpression::Literal(n) => Ok(format!(
-                        ".globl _{}
+        ast::Node::Program(node) => match &**node {
+            ast::Node::Function(id, node) => match &**node {
+                ast::Node::Statement(st, node) => match st {
+                    ast::Statement::Return => match &**node {
+                        ast::Node::Expression(expr) => match expr {
+                            ast::Expr::IntLiteral(n) => Ok(format!(
+                                ".globl _{}
 _{}:
   movl    ${}, %eax
   ret
 ",
-                        id, id, n
-                    )),
+                                id, id, n
+                            )),
+                            _ => Err("Expected int literal"),
+                        },
+                        _ => Err("Expected expression"),
+                    },
+                    _ => Err("Expected return statement"),
                 },
+                _ => Err("Expected statement"),
             },
             _ => Err("Expected AST::Function"),
         },
@@ -27,10 +35,13 @@ mod tests {
 
     #[test]
     fn basic_function() {
-        let ast = AST::Program(
-            AST::Function(
+        let ast = ast::Node::Program(
+            ast::Node::Function(
                 String::from("foo"),
-                ASTStatement::Return(ASTExpression::Literal(0)),
+                ast::Node::Statement(
+                    ast::Statement::Return,
+                    ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+                ).into()
             )
             .into(),
         );
