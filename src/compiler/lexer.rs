@@ -112,6 +112,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::PathBuf;
 
     use super::Token::*;
     use super::*;
@@ -230,228 +231,186 @@ mod tests {
         );
     }
 
-    #[test]
-    fn file_return_2() {
-        let contents = fs::read_to_string("tests/testfiles/valid/return_2.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(2),
-                Semicolon,
-                CloseBrace
-            ]
-        );
+    macro_rules! file_tests {
+        ($
+            (
+                $test_dir:literal: (
+                    $($name:ident: ($file:literal, $expected:expr),)+
+                ),
+            )+
+        ) => {
+            $(
+                $(
+                    #[test]
+                    fn $name() {
+                        let mut path = PathBuf::from($test_dir);
+                        path.push($file);
+                        let contents = fs::read_to_string(path).unwrap();
+                        assert_eq!(
+                            tokenize(&contents).unwrap(),
+                            $expected
+                        );
+                    }
+                )+
+            )+
+        }
     }
 
-    #[test]
-    fn file_multi_digit() {
-        let contents = fs::read_to_string("tests/testfiles/valid/multi_digit.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(100),
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_many_newlines() {
-        let contents = fs::read_to_string("tests/testfiles/valid/many_newlines.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_minimal_whitespace() {
-        let contents = fs::read_to_string("tests/testfiles/valid/minimal_whitespace.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_return_0() {
-        let contents = fs::read_to_string("tests/testfiles/valid/return_0.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_abundant_spaces() {
-        let contents = fs::read_to_string("tests/testfiles/valid/abundant_spaces.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_missing_paren() {
-        let contents = fs::read_to_string("tests/testfiles/invalid/missing_paren.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_missing_return_val() {
-        let contents = fs::read_to_string("tests/testfiles/invalid/missing_return_val.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                Semicolon,
-                CloseBrace
-            ]
-        );
-    }
-
-    #[test]
-    fn file_missing_closing_brace() {
-        let contents =
-            fs::read_to_string("tests/testfiles/invalid/missing_closing_brace.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                Semicolon,
-            ]
-        );
-    }
-
-    #[test]
-    fn file_missing_semicolon() {
-        let contents = fs::read_to_string("tests/testfiles/invalid/missing_semicolon.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                ReturnKw,
-                IntLiteral(0),
-                CloseBrace,
-            ]
-        );
-    }
-
-    #[test]
-    fn file_missing_return_space() {
-        let contents =
-            fs::read_to_string("tests/testfiles/invalid/missing_return_space.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                Identifier(String::from("return0")),
-                Semicolon,
-                CloseBrace,
-            ]
-        );
-    }
-
-    #[test]
-    fn file_wrong_return_case() {
-        let contents = fs::read_to_string("tests/testfiles/invalid/wrong_return_case.c").unwrap();
-        assert_eq!(
-            tokenize(&contents).unwrap(),
-            vec![
-                IntKw,
-                Identifier(String::from("main")),
-                OpenParen,
-                CloseParen,
-                OpenBrace,
-                Identifier(String::from("RETURN")),
-                IntLiteral(0),
-                Semicolon,
-                CloseBrace,
-            ]
-        );
+    file_tests! {
+        "tests/testfiles/valid": (
+            file_return_2: ("return_2.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_multi_digit: ("multi_digit.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(100),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_many_newlines: ("many_newlines.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_minimal_whitespace: ("minimal_whitespace.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_return_0: ("return_0.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_abundant_spaces: ("abundant_spaces.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+        ),
+        "tests/testfiles/invalid": (
+            file_missing_paren: ("missing_paren.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_missing_return_val: ("missing_return_val.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_missing_closing_brace: ("missing_closing_brace.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    Semicolon,
+                ]
+            ),
+            file_missing_semicolon: ("missing_semicolon.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(0),
+                    CloseBrace,
+                ]
+            ),
+            file_missing_return_space: ("missing_return_space.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    Identifier(String::from("return0")),
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_wrong_return_case: ("wrong_return_case.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    Identifier(String::from("RETURN")),
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+        ),
     }
 }
