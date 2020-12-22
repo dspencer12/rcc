@@ -13,6 +13,9 @@ pub enum Token {
     OpenParen,
     CloseParen,
     Semicolon,
+    Minus,
+    Tilde,
+    Bang,
     IntKw,
     ReturnKw,
     Identifier(String),
@@ -26,6 +29,9 @@ fn char_to_token(c: &char) -> Option<Token> {
         '(' => Some(Token::OpenParen),
         ')' => Some(Token::CloseParen),
         ';' => Some(Token::Semicolon),
+        '-' => Some(Token::Minus),
+        '~' => Some(Token::Tilde),
+        '!' => Some(Token::Bang),
         _ => None,
     }
 }
@@ -161,6 +167,13 @@ mod tests {
     fn basic_keywords() {
         assert_eq!(tokenize("int").unwrap(), vec![IntKw]);
         assert_eq!(tokenize("return").unwrap(), vec![ReturnKw]);
+    }
+
+    #[test]
+    fn basic_operators() {
+        assert_eq!(tokenize("-").unwrap(), vec![Minus]);
+        assert_eq!(tokenize("~").unwrap(), vec![Tilde]);
+        assert_eq!(tokenize("!").unwrap(), vec![Bang]);
     }
 
     #[test]
@@ -336,6 +349,106 @@ mod tests {
                     CloseBrace
                 ]
             ),
+            file_bitwise: ("bitwise.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    IntLiteral(12),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_bitwise_zero: ("bitwise_zero.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Tilde,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_neg: ("neg.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Minus,
+                    IntLiteral(5),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_nested_ops: ("nested_ops.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    Minus,
+                    IntLiteral(3),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_nested_ops_2: ("nested_ops_2.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Minus,
+                    Tilde,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_not_0: ("not_0.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    IntLiteral(0),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_not_5: ("not_5.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    IntLiteral(5),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
         ),
         "tests/testfiles/invalid": (
             file_missing_paren: ("missing_paren.c",
@@ -407,6 +520,60 @@ mod tests {
                     OpenBrace,
                     Identifier(String::from("RETURN")),
                     IntLiteral(0),
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_missing_const: ("missing_const.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_missing_semicolon_2: ("missing_semicolon_2.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    IntLiteral(5),
+                    CloseBrace,
+                ]
+            ),
+            file_nested_missing_const: ("nested_missing_const.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Bang,
+                    Tilde,
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_wrong_unary_order: ("wrong_unary_order.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(4),
+                    Minus,
                     Semicolon,
                     CloseBrace,
                 ]
