@@ -8,16 +8,23 @@ use super::error::SyntaxError;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    // Syntax elements
     OpenBrace,
     CloseBrace,
     OpenParen,
     CloseParen,
     Semicolon,
+    // Operators
     Minus,
     Tilde,
     Bang,
+    Plus,
+    Slash,
+    Asterisk,
+    // Keywords
     IntKw,
     ReturnKw,
+    // Identifiers and literals
     Identifier(String),
     IntLiteral(i32),
 }
@@ -32,6 +39,9 @@ fn char_to_token(c: &char) -> Option<Token> {
         '-' => Some(Token::Minus),
         '~' => Some(Token::Tilde),
         '!' => Some(Token::Bang),
+        '+' => Some(Token::Plus),
+        '/' => Some(Token::Slash),
+        '*' => Some(Token::Asterisk),
         _ => None,
     }
 }
@@ -170,10 +180,17 @@ mod tests {
     }
 
     #[test]
-    fn basic_operators() {
+    fn unary_operators() {
         assert_eq!(tokenize("-").unwrap(), vec![Minus]);
         assert_eq!(tokenize("~").unwrap(), vec![Tilde]);
         assert_eq!(tokenize("!").unwrap(), vec![Bang]);
+    }
+
+    #[test]
+    fn binary_operators() {
+        assert_eq!(tokenize("+").unwrap(), vec![Plus]);
+        assert_eq!(tokenize("/").unwrap(), vec![Slash]);
+        assert_eq!(tokenize("*").unwrap(), vec![Asterisk]);
     }
 
     #[test]
@@ -449,6 +466,204 @@ mod tests {
                     CloseBrace
                 ]
             ),
+            file_add: ("add.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(1),
+                    Plus,
+                    IntLiteral(2),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_associativity_div: ("associativity_div.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(6),
+                    Slash,
+                    IntLiteral(3),
+                    Slash,
+                    IntLiteral(2),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_associativity: ("associativity.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(1),
+                    Minus,
+                    IntLiteral(2),
+                    Minus,
+                    IntLiteral(3),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_div_neg: ("div_neg.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    OpenParen,
+                    Minus,
+                    IntLiteral(12),
+                    CloseParen,
+                    Slash,
+                    IntLiteral(5),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_div: ("div.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(4),
+                    Slash,
+                    IntLiteral(2),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_mult: ("mult.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    Asterisk,
+                    IntLiteral(3),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_parens: ("parens.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    Asterisk,
+                    OpenParen,
+                    IntLiteral(3),
+                    Plus,
+                    IntLiteral(4),
+                    CloseParen,
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_precedence: ("precedence.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    Plus,
+                    IntLiteral(3),
+                    Asterisk,
+                    IntLiteral(4),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_sub_neg: ("sub_neg.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    Minus,
+                    Minus,
+                    IntLiteral(1),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_sub: ("sub.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(1),
+                    Minus,
+                    IntLiteral(2),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_unop_add: ("unop_add.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Tilde,
+                    IntLiteral(2),
+                    Plus,
+                    IntLiteral(3),
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
+            file_unop_parens: ("unop_parens.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Tilde,
+                    OpenParen,
+                    IntLiteral(1),
+                    Plus,
+                    IntLiteral(1),
+                    CloseParen,
+                    Semicolon,
+                    CloseBrace
+                ]
+            ),
         ),
         "tests/testfiles/invalid": (
             file_missing_paren: ("missing_paren.c",
@@ -575,6 +790,65 @@ mod tests {
                     IntLiteral(4),
                     Minus,
                     Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_malformed_paren: ("malformed_paren.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    OpenParen,
+                    Minus,
+                    IntLiteral(3),
+                    CloseParen,
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_missing_first_op: ("missing_first_op.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    Slash,
+                    IntLiteral(3),
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_missing_second_op: ("missing_second_op.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(1),
+                    Plus,
+                    Semicolon,
+                    CloseBrace,
+                ]
+            ),
+            file_no_semicolon: ("no_semicolon.c",
+                vec![
+                    IntKw,
+                    Identifier(String::from("main")),
+                    OpenParen,
+                    CloseParen,
+                    OpenBrace,
+                    ReturnKw,
+                    IntLiteral(2),
+                    Asterisk,
+                    IntLiteral(2),
                     CloseBrace,
                 ]
             ),
