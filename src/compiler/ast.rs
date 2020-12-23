@@ -42,12 +42,31 @@ impl fmt::Display for Statement {
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     IntLiteral(i32),
+    UnOp(UnOp, Box<Node>),
 }
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IntLiteral(n) => write!(f, "Int<{}>", n),
+            Self::UnOp(op, node) => write!(f, "{}{}", op, node),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum UnOp {
+    Negate,
+    Complement,
+    LogicalNegate,
+}
+
+impl fmt::Display for UnOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Negate => write!(f, "-"),
+            Self::Complement => write!(f, "~"),
+            Self::LogicalNegate => write!(f, "!"),
         }
     }
 }
@@ -59,6 +78,44 @@ mod tests {
     #[test]
     fn display_int_literal() {
         assert_eq!(format!("{}", Expr::IntLiteral(1)), "Int<1>");
+    }
+
+    #[test]
+    fn display_unary_operators() {
+        assert_eq!(format!("{}", UnOp::Negate), "-");
+        assert_eq!(format!("{}", UnOp::Complement), "~");
+        assert_eq!(format!("{}", UnOp::LogicalNegate), "!");
+    }
+
+    #[test]
+    fn display_unary_expressions() {
+        assert_eq!(
+            format!(
+                "{}",
+                Expr::UnOp(UnOp::Negate, Node::Expression(Expr::IntLiteral(5)).into())
+            ),
+            "-Int<5>"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Expr::UnOp(
+                    UnOp::Complement,
+                    Node::Expression(Expr::IntLiteral(0)).into()
+                )
+            ),
+            "~Int<0>"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Expr::UnOp(
+                    UnOp::LogicalNegate,
+                    Node::Expression(Expr::IntLiteral(16)).into()
+                )
+            ),
+            "!Int<16>"
+        );
     }
 
     #[test]

@@ -4,13 +4,28 @@ use super::ast;
 use super::error::SyntaxError;
 use super::lexer::Token;
 
-fn parse_expression<'a, I>(tokens: &mut I) -> Option<ast::Node>
+fn token_to_unop(t: &Token) -> Result<ast::UnOp, Box<dyn Error>> {
+    match t {
+        Token::Bang => Ok(ast::UnOp::LogicalNegate),
+        Token::Minus => Ok(ast::UnOp::Negate),
+        Token::Tilde => Ok(ast::UnOp::Complement),
+        _ => Err("Invalid unary operator".into()),
+    }
+}
+
+fn parse_expression<'a, I>(tokens: &mut I) -> Result<ast::Node, Box<dyn Error>>
 where
     I: Iterator<Item = &'a Token>,
 {
     match tokens.next() {
-        Some(Token::IntLiteral(n)) => Some(ast::Node::Expression(ast::Expr::IntLiteral(*n))),
-        _ => None,
+        Some(Token::IntLiteral(n)) => Ok(ast::Node::Expression(ast::Expr::IntLiteral(*n))),
+        Some(t @ Token::Bang) | Some(t @ Token::Minus) | Some(t @ Token::Tilde) => {
+            Ok(ast::Node::Expression(ast::Expr::UnOp(
+                token_to_unop(t)?,
+                parse_expression(tokens)?.into(),
+            )))
+        }
+        _ => Err(SyntaxError::InvalidExpression.into()),
     }
 }
 
@@ -19,15 +34,15 @@ where
     I: Iterator<Item = &'a Token>,
 {
     match tokens.next() {
-        Some(Token::ReturnKw) => match parse_expression(tokens) {
-            Some(e) => match tokens.next() {
+        Some(Token::ReturnKw) => {
+            let expr = parse_expression(tokens)?;
+            match tokens.next() {
                 Some(Token::Semicolon) => {
-                    Ok(ast::Node::Statement(ast::Statement::Return, e.into()))
+                    Ok(ast::Node::Statement(ast::Statement::Return, expr.into()))
                 }
                 _ => Err(SyntaxError::MissingSemicolon.into()),
-            },
-            None => Err(SyntaxError::InvalidExpression.into()),
-        },
+            }
+        }
         _ => Err(SyntaxError::UnexpectedToken.into()),
     }
 }
@@ -82,6 +97,17 @@ mod tests {
     }
 
     #[test]
+    fn unary_operators() {
+        assert_eq!(
+            parse_expression(&mut vec![Tilde, IntLiteral(0)].iter()).unwrap(),
+            ast::Node::Expression(ast::Expr::UnOp(
+                ast::UnOp::Complement,
+                ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+            ))
+        )
+    }
+
+    #[test]
     fn return_statement() {
         assert_eq!(
             parse_statement(&mut vec![ReturnKw, IntLiteral(0), Semicolon].iter()).unwrap(),
@@ -116,7 +142,8 @@ mod tests {
                 ast::Node::Statement(
                     ast::Statement::Return,
                     ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
-                ).into()
+                )
+                .into()
             )
         );
     }
@@ -143,8 +170,45 @@ mod tests {
                     ast::Node::Statement(
                         ast::Statement::Return,
                         ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
-                    ).into()
-                ).into()
+                    )
+                    .into()
+                )
+                .into()
+            )
+        );
+    }
+
+    #[test]
+    fn program_function_return_complement_0() {
+        let func_name = String::from("foo");
+        assert_eq!(
+            parse(&vec![
+                IntKw,
+                Identifier(func_name.clone()),
+                OpenParen,
+                CloseParen,
+                OpenBrace,
+                ReturnKw,
+                Tilde,
+                IntLiteral(0),
+                Semicolon,
+                CloseBrace
+            ])
+            .unwrap(),
+            ast::Node::Program(
+                ast::Node::Function(
+                    func_name.clone(),
+                    ast::Node::Statement(
+                        ast::Statement::Return,
+                        ast::Node::Expression(ast::Expr::UnOp(
+                            ast::UnOp::Complement,
+                            ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+                        ))
+                        .into()
+                    )
+                    .into()
+                )
+                .into()
             )
         );
     }
