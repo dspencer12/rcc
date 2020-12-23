@@ -52,9 +52,16 @@ macro_rules! file_compilation_tests {
 
 file_compilation_tests! {
     abundant_spaces: "abundant_spaces.c",
+    bitwise_zero: "bitwise_zero.c",
+    bitwise: "bitwise.c",
     many_newlines: "many_newlines.c",
     minimal_whitespace: "minimal_whitespace.c",
     multi_digit: "multi_digit.c",
+    neg: "neg.c",
+    nested_ops_2: "nested_ops_2.c",
+    nested_ops: "nested_ops.c",
+    not_0: "not_0.c",
+    not_5: "not_5.c",
     return_0: "return_0.c",
     return_2: "return_2.c",
 }
@@ -88,9 +95,14 @@ macro_rules! file_error_tests {
 
 file_error_tests! {
     missing_closing_brace: ("missing_closing_brace.c", SyntaxError::MissingCloseBrace),
+    missing_const: ("missing_const.c", SyntaxError::InvalidExpression),
     missing_paren: ("missing_paren.c", SyntaxError::MissingCloseParen),
     missing_return_space: ("missing_return_space.c", SyntaxError::UnexpectedToken),
     missing_return_val: ("missing_return_val.c", SyntaxError::InvalidExpression),
     missing_semicolon: ("missing_semicolon.c", SyntaxError::MissingSemicolon),
+    missing_semicolon_2: ("missing_semicolon_2.c", SyntaxError::MissingSemicolon),
+    nested_missing_const: ("nested_missing_const.c", SyntaxError::InvalidExpression),
     wrong_return_case: ("wrong_return_case.c", SyntaxError::UnexpectedToken),
+    // TODO: update this expected error when binary operators are supported
+    wrong_unary_order: ("wrong_unary_order.c", SyntaxError::MissingSemicolon),
 }
