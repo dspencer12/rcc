@@ -40,7 +40,7 @@ where
                 _ => Err(SyntaxError::MissingCloseParen.into()),
             }
         }
-        _ => Err(SyntaxError::InvalidExpression.into()),
+        _ => Err(SyntaxError::InvalidFactor.into()),
     }
 }
 
@@ -406,7 +406,7 @@ mod tests {
                 Semicolon,
                 CloseBrace,
             ]),
-            SyntaxError::InvalidExpression
+            SyntaxError::InvalidFactor
         );
     }
 

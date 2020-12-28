@@ -1,70 +1,113 @@
 use super::ast;
 
-fn stack_to_string(stack: &mut Vec<String>) -> String {
-    stack.reverse();
-    stack.join("\n")
+trait Assembly {
+    fn generate_assembly(&self) -> Result<String, &'static str>;
+}
+
+impl Assembly for ast::Node {
+    fn generate_assembly(&self) -> Result<String, &'static str> {
+        let mut code = Vec::new();
+        match self {
+            ast::Node::Program(node) => code.push(node.generate_assembly()?),
+            ast::Node::Function(id, node) => {
+                code.push(format!(".globl _{}", id));
+                code.push(format!("_{}:", id));
+                code.push(node.generate_assembly()?);
+            }
+            ast::Node::Statement(st, expr) => match st {
+                ast::Statement::Return => {
+                    code.push(expr.generate_assembly()?);
+                    code.push(String::from("  ret"));
+                }
+            },
+        };
+        Ok(code.join("\n"))
+    }
+}
+
+impl Assembly for ast::Expr {
+    fn generate_assembly(&self) -> Result<String, &'static str> {
+        match self {
+            ast::Expr::Term(t) => t.generate_assembly(),
+        }
+    }
+}
+
+impl Assembly for ast::Term {
+    fn generate_assembly(&self) -> Result<String, &'static str> {
+        match self {
+            ast::Term::Factor(f) => f.generate_assembly(),
+            ast::Term::BinOp(op, t1, t2) => generate_binary_op(op, &**t1, &**t2),
+        }
+    }
+}
+
+impl Assembly for ast::Factor {
+    fn generate_assembly(&self) -> Result<String, &'static str> {
+        match self {
+            // Move the integer into %eax
+            ast::Factor::IntLiteral(n) => Ok(format!("  movl\t${}, %eax", n)),
+            ast::Factor::UnOp(op, f) => generate_unary_op(op, f),
+            ast::Factor::BinOp(op, f1, f2) => generate_binary_op(op, &**f1, &**f2),
+            ast::Factor::Expr(e) => e.generate_assembly(),
+        }
+    }
 }
 
 fn generate_unary_op(op: &ast::UnOp, factor: &ast::Factor) -> Result<String, &'static str> {
     let mut code = Vec::new();
+    code.push(factor.generate_assembly()?);
     match op {
         ast::UnOp::Negate => code.push(String::from("  neg\t%eax")),
         ast::UnOp::Complement => code.push(String::from("  not\t%eax")),
         ast::UnOp::LogicalNegate => {
-            code.push(String::from("  sete\t%al"));
+            code.push(String::from("  cmpl\t$0, %eax"));
             // Zero out the eax register
             code.push(String::from("  movl\t$0, %eax"));
-            code.push(String::from("  cmpl\t$0, %eax"));
+            code.push(String::from("  sete\t%al"));
         }
     }
-    code.push(generate_factor(factor)?);
-    Ok(stack_to_string(&mut code))
+    Ok(code.join("\n"))
 }
 
-fn generate_factor(factor: &ast::Factor) -> Result<String, &'static str> {
-    match factor {
-        // Move the integer into %eax
-        ast::Factor::IntLiteral(n) => Ok(format!("  movl\t${}, %eax", n)),
-        ast::Factor::UnOp(op, f) => generate_unary_op(op, f),
-        _ => Err("Unsupported factor"),
-    }
-}
-
-fn generate_return(expr: &ast::Expr) -> Result<String, &'static str> {
-    match expr {
-        ast::Expr::Term(t) => match &**t {
-            ast::Term::Factor(f) => generate_factor(f),
-            _ => Err("Expected factor"),
-        },
-    }
-}
-
-fn generate_statement(
-    statement: &ast::Statement,
-    expr: &ast::Expr,
+fn generate_binary_op(
+    op: &ast::BinOp,
+    a: &impl Assembly,
+    b: &impl Assembly,
 ) -> Result<String, &'static str> {
     let mut code = Vec::new();
-    match statement {
-        ast::Statement::Return => {
-            code.push(String::from("  ret"));
-            code.push(generate_return(expr)?);
+    // Evaluate a
+    code.push(a.generate_assembly()?);
+    // Push the value in %eax on to the stack
+    code.push(String::from("  push\t%rax"));
+    // Evaluate b
+    code.push(b.generate_assembly()?);
+    // Pop a's result from the stack to the %ecx register
+    code.push(String::from("  pop\t%rcx"));
+    match op {
+        // Add %ecx to %eax and save the result in %eax
+        ast::BinOp::Add => code.push(String::from("  addl\t%ecx, %eax")),
+        ast::BinOp::Subtract => {
+            code.push(String::from("  subl\t%eax, %ecx"));
+            code.push(String::from("  movl\t%ecx, %eax"));
         }
-    }
-    Ok(stack_to_string(&mut code))
+        ast::BinOp::Multiply => code.push(String::from("  imul\t%ecx, %eax")),
+        ast::BinOp::Divide => {
+            // Move b's value to %ebx
+            code.push(String::from("  movl\t%eax, %ebx"));
+            // Move a's value to %eax
+            code.push(String::from("  movl\t%ecx, %eax"));
+            // Sign extend the value in %eax
+            code.push(String::from("  cdq"));
+            // Divide %edx:%eax by %ebx
+            code.push(String::from("  idivl\t%ebx"));
+        }
+    };
+    Ok(code.join("\n"))
 }
 
 pub fn generate(ast: &ast::Node) -> Result<String, &'static str> {
-    let mut code = Vec::new();
-    match ast {
-        ast::Node::Program(node) => code.push(generate(node)?),
-        ast::Node::Function(id, node) => {
-            code.push(generate(node)?);
-            code.push(format!("_{}:", id));
-            code.push(format!(".globl _{}", id));
-        }
-        ast::Node::Statement(st, expr) => code.push(generate_statement(st, expr)?),
-    };
-    Ok(stack_to_string(&mut code))
+    ast.generate_assembly()
 }
 
 #[cfg(test)]

@@ -13,6 +13,7 @@ pub enum SyntaxError {
     MissingKeyword(String),
     InvalidIdentifier(String),
     InvalidExpression,
+    InvalidFactor,
     UnexpectedToken,
 }
 
@@ -30,6 +31,7 @@ impl fmt::Display for SyntaxError {
             Self::MissingSemicolon => write!(f, "Syntax Error: Expected semicolon"),
             Self::MissingIdentifier => write!(f, "Syntax Error: Expected identifier"),
             Self::InvalidExpression => write!(f, "Syntax Error: Invalid expression"),
+            Self::InvalidFactor => write!(f, "Syntax Error: Invalid factor"),
             Self::UnexpectedToken => write!(f, "Syntax Error: Uexpected token"),
             SyntaxError::Unknown => write!(f, "Syntax Error: Unknown error"),
         }
