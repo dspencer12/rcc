@@ -40,14 +40,12 @@ impl fmt::Display for Statement {
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Term(Box<Term>),
-    //BinOp(Box<BinOpTerm>),
 }
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Term(t) => write!(f, "{}", *t),
-            //Self::BinOp(t) => write!(f, "{}", *t),
         }
     }
 }
