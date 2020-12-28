@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::iter::Peekable;
 
 use super::ast;
 use super::error::SyntaxError;
@@ -13,23 +14,81 @@ fn token_to_unop(t: &Token) -> Result<ast::UnOp, Box<dyn Error>> {
     }
 }
 
-fn parse_expression<'a, I>(tokens: &mut I) -> Result<ast::Node, Box<dyn Error>>
+fn token_to_binop(t: &Token) -> Result<ast::BinOp, Box<dyn Error>> {
+    match t {
+        Token::Plus => Ok(ast::BinOp::Add),
+        Token::Minus => Ok(ast::BinOp::Subtract),
+        Token::Asterisk => Ok(ast::BinOp::Multiply),
+        Token::Slash => Ok(ast::BinOp::Divide),
+        _ => Err("Invalid binary operator".into()),
+    }
+}
+
+fn parse_factor<'a, I>(tokens: &mut Peekable<I>) -> Result<ast::Factor, Box<dyn Error>>
 where
     I: Iterator<Item = &'a Token>,
 {
     match tokens.next() {
-        Some(Token::IntLiteral(n)) => Ok(ast::Node::Expression(ast::Expr::IntLiteral(*n))),
-        Some(t @ Token::Bang) | Some(t @ Token::Minus) | Some(t @ Token::Tilde) => {
-            Ok(ast::Node::Expression(ast::Expr::UnOp(
-                token_to_unop(t)?,
-                parse_expression(tokens)?.into(),
-            )))
+        Some(Token::IntLiteral(n)) => Ok(ast::Factor::IntLiteral(*n)),
+        Some(t @ Token::Bang) | Some(t @ Token::Minus) | Some(t @ Token::Tilde) => Ok(
+            ast::Factor::UnOp(token_to_unop(t)?, parse_factor(tokens)?.into()),
+        ),
+        Some(Token::OpenParen) => {
+            let expr = parse_expression(tokens)?;
+            match tokens.next() {
+                Some(Token::CloseParen) => Ok(ast::Factor::Expr(expr.into())),
+                _ => Err(SyntaxError::MissingCloseParen.into()),
+            }
         }
         _ => Err(SyntaxError::InvalidExpression.into()),
     }
 }
 
-fn parse_statement<'a, I>(tokens: &mut I) -> Result<ast::Node, Box<dyn Error>>
+fn parse_term<'a, I>(tokens: &mut Peekable<I>) -> Result<ast::Term, Box<dyn Error>>
+where
+    I: Iterator<Item = &'a Token>,
+{
+    let mut factor = parse_factor(tokens)?;
+    loop {
+        let next = tokens.peek();
+        match next {
+            Some(t) => match t {
+                Token::Asterisk | Token::Slash => {
+                    let op = token_to_binop(tokens.next().unwrap())?;
+                    let next_factor = parse_factor(tokens)?;
+                    factor = ast::Factor::BinOp(op, factor.into(), next_factor.into());
+                }
+                _ => break,
+            },
+            None => break,
+        };
+    }
+    Ok(ast::Term::Factor(factor.into()))
+}
+
+fn parse_expression<'a, I>(tokens: &mut Peekable<I>) -> Result<ast::Expr, Box<dyn Error>>
+where
+    I: Iterator<Item = &'a Token>,
+{
+    let mut term = parse_term(tokens)?;
+    loop {
+        let next = tokens.peek();
+        match next {
+            Some(t) => match t {
+                Token::Plus | Token::Minus => {
+                    let op = token_to_binop(tokens.next().unwrap())?;
+                    let next_term = parse_term(tokens)?;
+                    term = ast::Term::BinOp(op, term.into(), next_term.into());
+                }
+                _ => break,
+            },
+            None => break,
+        };
+    }
+    Ok(ast::Expr::Term(term.into()))
+}
+
+fn parse_statement<'a, I>(tokens: &mut Peekable<I>) -> Result<ast::Node, Box<dyn Error>>
 where
     I: Iterator<Item = &'a Token>,
 {
@@ -47,7 +106,7 @@ where
     }
 }
 
-fn parse_function<'a, I>(tokens: &mut I) -> Result<ast::Node, Box<dyn Error>>
+fn parse_function<'a, I>(tokens: &mut Peekable<I>) -> Result<ast::Node, Box<dyn Error>>
 where
     I: Iterator<Item = &'a Token>,
 {
@@ -79,41 +138,43 @@ where
 
 pub fn parse(tokens: &Vec<Token>) -> Result<ast::Node, Box<dyn Error>> {
     Ok(ast::Node::Program(
-        parse_function(&mut tokens.iter())?.into(),
+        parse_function(&mut tokens.iter().peekable())?.into(),
     ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ast::*;
     use Token::*;
 
     #[test]
     fn int_literal() {
         assert_eq!(
-            parse_expression(&mut vec![IntLiteral(1)].iter()).unwrap(),
-            ast::Node::Expression(ast::Expr::IntLiteral(1))
+            parse_expression(&mut vec![IntLiteral(1)].iter().peekable()).unwrap(),
+            Expr::Term(Term::Factor(Factor::IntLiteral(1).into()).into())
         );
     }
 
     #[test]
     fn unary_operators() {
         assert_eq!(
-            parse_expression(&mut vec![Tilde, IntLiteral(0)].iter()).unwrap(),
-            ast::Node::Expression(ast::Expr::UnOp(
-                ast::UnOp::Complement,
-                ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
-            ))
+            parse_expression(&mut vec![Tilde, IntLiteral(0)].iter().peekable()).unwrap(),
+            Expr::Term(
+                Term::Factor(Factor::UnOp(UnOp::Complement, Factor::IntLiteral(0).into()).into())
+                    .into()
+            )
         )
     }
 
     #[test]
     fn return_statement() {
         assert_eq!(
-            parse_statement(&mut vec![ReturnKw, IntLiteral(0), Semicolon].iter()).unwrap(),
-            ast::Node::Statement(
-                ast::Statement::Return,
-                ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+            parse_statement(&mut vec![ReturnKw, IntLiteral(0), Semicolon].iter().peekable())
+                .unwrap(),
+            Node::Statement(
+                Statement::Return,
+                Expr::Term(Term::Factor(Factor::IntLiteral(0).into()).into()).into()
             )
         );
     }
@@ -135,13 +196,14 @@ mod tests {
                     CloseBrace
                 ]
                 .iter()
+                .peekable()
             )
             .unwrap(),
-            ast::Node::Function(
+            Node::Function(
                 func_name.clone(),
-                ast::Node::Statement(
-                    ast::Statement::Return,
-                    ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+                Node::Statement(
+                    Statement::Return,
+                    Expr::Term(Term::Factor(Factor::IntLiteral(0).into()).into()).into()
                 )
                 .into()
             )
@@ -164,12 +226,12 @@ mod tests {
                 CloseBrace
             ])
             .unwrap(),
-            ast::Node::Program(
-                ast::Node::Function(
+            Node::Program(
+                Node::Function(
                     func_name.clone(),
-                    ast::Node::Statement(
-                        ast::Statement::Return,
-                        ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
+                    Node::Statement(
+                        Statement::Return,
+                        Expr::Term(Term::Factor(Factor::IntLiteral(0).into()).into()).into()
                     )
                     .into()
                 )
@@ -195,15 +257,74 @@ mod tests {
                 CloseBrace
             ])
             .unwrap(),
-            ast::Node::Program(
-                ast::Node::Function(
+            Node::Program(
+                Node::Function(
                     func_name.clone(),
-                    ast::Node::Statement(
-                        ast::Statement::Return,
-                        ast::Node::Expression(ast::Expr::UnOp(
-                            ast::UnOp::Complement,
-                            ast::Node::Expression(ast::Expr::IntLiteral(0)).into()
-                        ))
+                    Node::Statement(
+                        Statement::Return,
+                        Expr::Term(
+                            Term::Factor(
+                                Factor::UnOp(UnOp::Complement, Factor::IntLiteral(0).into()).into()
+                            )
+                            .into()
+                        )
+                        .into()
+                    )
+                    .into()
+                )
+                .into()
+            )
+        );
+    }
+
+    #[test]
+    fn return_unary_on_unary_expr() {
+        let func_name = String::from("foo");
+        assert_eq!(
+            parse(&vec![
+                IntKw,
+                Identifier(func_name.clone()),
+                OpenParen,
+                CloseParen,
+                OpenBrace,
+                ReturnKw,
+                Tilde,
+                OpenParen,
+                Bang,
+                IntLiteral(1),
+                CloseParen,
+                Semicolon,
+                CloseBrace
+            ])
+            .unwrap(),
+            Node::Program(
+                Node::Function(
+                    func_name.clone(),
+                    Node::Statement(
+                        Statement::Return,
+                        Expr::Term(
+                            Term::Factor(
+                                Factor::UnOp(
+                                    UnOp::Complement,
+                                    Factor::Expr(
+                                        Expr::Term(
+                                            Term::Factor(
+                                                Factor::UnOp(
+                                                    UnOp::LogicalNegate,
+                                                    Factor::IntLiteral(1).into()
+                                                )
+                                                .into()
+                                            )
+                                            .into()
+                                        )
+                                        .into()
+                                    )
+                                    .into()
+                                )
+                                .into()
+                            )
+                            .into()
+                        )
                         .into()
                     )
                     .into()

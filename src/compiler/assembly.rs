@@ -5,7 +5,7 @@ fn stack_to_string(stack: &mut Vec<String>) -> String {
     stack.join("\n")
 }
 
-fn generate_unary_op(op: &ast::UnOp, ast: &ast::Node) -> Result<String, &'static str> {
+fn generate_unary_op(op: &ast::UnOp, factor: &ast::Factor) -> Result<String, &'static str> {
     let mut code = Vec::new();
     match op {
         ast::UnOp::Negate => code.push(String::from("  neg\t%eax")),
@@ -17,26 +17,37 @@ fn generate_unary_op(op: &ast::UnOp, ast: &ast::Node) -> Result<String, &'static
             code.push(String::from("  cmpl\t$0, %eax"));
         }
     }
-    code.push(generate_return(ast)?);
+    code.push(generate_factor(factor)?);
     Ok(stack_to_string(&mut code))
 }
 
-fn generate_return(ast: &ast::Node) -> Result<String, &'static str> {
-    match ast {
-        ast::Node::Expression(expr) => match expr {
-            ast::Expr::IntLiteral(n) => Ok(format!("  movl\t${}, %eax", n)),
-            ast::Expr::UnOp(op, node) => generate_unary_op(op, node),
-        }
-        _ => Err("Expected expression")
+fn generate_factor(factor: &ast::Factor) -> Result<String, &'static str> {
+    match factor {
+        // Move the integer into %eax
+        ast::Factor::IntLiteral(n) => Ok(format!("  movl\t${}, %eax", n)),
+        ast::Factor::UnOp(op, f) => generate_unary_op(op, f),
+        _ => Err("Unsupported factor"),
     }
 }
 
-fn generate_statement(statement: &ast::Statement, ast: &ast::Node) -> Result<String, &'static str> {
+fn generate_return(expr: &ast::Expr) -> Result<String, &'static str> {
+    match expr {
+        ast::Expr::Term(t) => match &**t {
+            ast::Term::Factor(f) => generate_factor(f),
+            _ => Err("Expected factor"),
+        },
+    }
+}
+
+fn generate_statement(
+    statement: &ast::Statement,
+    expr: &ast::Expr,
+) -> Result<String, &'static str> {
     let mut code = Vec::new();
     match statement {
         ast::Statement::Return => {
             code.push(String::from("  ret"));
-            code.push(generate_return(ast)?);
+            code.push(generate_return(expr)?);
         }
     }
     Ok(stack_to_string(&mut code))
@@ -51,8 +62,7 @@ pub fn generate(ast: &ast::Node) -> Result<String, &'static str> {
             code.push(format!("_{}:", id));
             code.push(format!(".globl _{}", id));
         }
-        ast::Node::Statement(st, node) => code.push(generate_statement(st, node)?),
-        ast::Node::Expression(_) => return Err("Unexpected expression"),
+        ast::Node::Statement(st, expr) => code.push(generate_statement(st, expr)?),
     };
     Ok(stack_to_string(&mut code))
 }
@@ -60,15 +70,16 @@ pub fn generate(ast: &ast::Node) -> Result<String, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ast::*;
 
     #[test]
     fn basic_function() {
-        let ast = ast::Node::Program(
-            ast::Node::Function(
+        let ast = Node::Program(
+            Node::Function(
                 String::from("foo"),
-                ast::Node::Statement(
-                    ast::Statement::Return,
-                    ast::Node::Expression(ast::Expr::IntLiteral(0)).into(),
+                Node::Statement(
+                    Statement::Return,
+                    Expr::Term(Term::Factor(Factor::IntLiteral(0).into()).into()).into(),
                 )
                 .into(),
             )
@@ -85,22 +96,24 @@ _foo:
 
     #[test]
     fn function_return_negate_1() {
-        let ast = ast::Node::Program(
-            ast::Node::Function(
+        let ast = Node::Program(
+            Node::Function(
                 String::from("foo"),
-                ast::Node::Statement(
-                    ast::Statement::Return,
-                    ast::Node::Expression(
-                        ast::Expr::UnOp(
-                            ast::UnOp::Negate,
-                            ast::Node::Expression(ast::Expr::IntLiteral(1)).into()
+                Node::Statement(
+                    Statement::Return,
+                    Expr::Term(
+                        Term::Factor(
+                            Factor::UnOp(UnOp::Negate, Factor::IntLiteral(1).into()).into(),
                         )
-                    ).into()
+                        .into(),
+                    )
+                    .into(),
                 )
                 .into(),
             )
             .into(),
-        );
+        )
+        .into();
         assert_eq!(
             generate(&ast).unwrap(),
             ".globl _foo
@@ -113,17 +126,18 @@ _foo:
 
     #[test]
     fn function_return_complement_1() {
-        let ast = ast::Node::Program(
-            ast::Node::Function(
+        let ast = Node::Program(
+            Node::Function(
                 String::from("foo"),
-                ast::Node::Statement(
-                    ast::Statement::Return,
-                    ast::Node::Expression(
-                        ast::Expr::UnOp(
-                            ast::UnOp::Complement,
-                            ast::Node::Expression(ast::Expr::IntLiteral(1)).into()
+                Node::Statement(
+                    Statement::Return,
+                    Expr::Term(
+                        Term::Factor(
+                            Factor::UnOp(UnOp::Complement, Factor::IntLiteral(1).into()).into(),
                         )
-                    ).into()
+                        .into(),
+                    )
+                    .into(),
                 )
                 .into(),
             )
@@ -141,17 +155,18 @@ _foo:
 
     #[test]
     fn function_return_logical_negate_1() {
-        let ast = ast::Node::Program(
-            ast::Node::Function(
+        let ast = Node::Program(
+            Node::Function(
                 String::from("foo"),
-                ast::Node::Statement(
-                    ast::Statement::Return,
-                    ast::Node::Expression(
-                        ast::Expr::UnOp(
-                            ast::UnOp::LogicalNegate,
-                            ast::Node::Expression(ast::Expr::IntLiteral(1)).into()
+                Node::Statement(
+                    Statement::Return,
+                    Expr::Term(
+                        Term::Factor(
+                            Factor::UnOp(UnOp::LogicalNegate, Factor::IntLiteral(1).into()).into(),
                         )
-                    ).into()
+                        .into(),
+                    )
+                    .into(),
                 )
                 .into(),
             )
