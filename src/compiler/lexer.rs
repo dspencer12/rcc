@@ -29,19 +29,19 @@ pub enum Token {
     IntLiteral(i32),
 }
 
-fn char_to_token(c: &char) -> Option<Token> {
-    match c {
-        '{' => Some(Token::OpenBrace),
-        '}' => Some(Token::CloseBrace),
-        '(' => Some(Token::OpenParen),
-        ')' => Some(Token::CloseParen),
-        ';' => Some(Token::Semicolon),
-        '-' => Some(Token::Minus),
-        '~' => Some(Token::Tilde),
-        '!' => Some(Token::Bang),
-        '+' => Some(Token::Plus),
-        '/' => Some(Token::Slash),
-        '*' => Some(Token::Asterisk),
+fn symbols_to_token(s: &str) -> Option<Token> {
+    match s {
+        "{" => Some(Token::OpenBrace),
+        "}" => Some(Token::CloseBrace),
+        "(" => Some(Token::OpenParen),
+        ")" => Some(Token::CloseParen),
+        ";" => Some(Token::Semicolon),
+        "-" => Some(Token::Minus),
+        "~" => Some(Token::Tilde),
+        "!" => Some(Token::Bang),
+        "+" => Some(Token::Plus),
+        "/" => Some(Token::Slash),
+        "*" => Some(Token::Asterisk),
         _ => None,
     }
 }
@@ -105,23 +105,36 @@ fn tokenize_const_or_id(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     Ok(res)
 }
 
+fn tokenize_symbol(input: &str) -> Result<Option<(Token, &str)>, Box<dyn Error>> {
+    lazy_static! {
+        static ref SYMBOL_REGEX: Regex = Regex::new(r"^(?:\{|\}|\(|\)|;|-|~|!|\+|/|\*)").unwrap();
+    }
+    match SYMBOL_REGEX.find(input) {
+        Some(m) => match symbols_to_token(m.as_str()) {
+            Some(t) => Ok(Some((t, &input[m.end()..]))),
+            None => Err("Unexpected symbols".into()),
+        },
+        None => Ok(None),
+    }
+}
+
 pub fn tokenize(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
-    match input.chars().next() {
-        Some(c) => match char_to_token(&c) {
-            Some(t) => {
-                let mut tokens = vec![t];
-                tokens.extend(tokenize(&input[1..])?);
-                Ok(tokens)
-            }
-            None => {
+    match tokenize_symbol(input)? {
+        Some((t, input)) => {
+            let mut tokens = vec![t];
+            tokens.extend(tokenize(input)?);
+            Ok(tokens)
+        },
+        None => match input.chars().next() {
+            Some(c) => {
                 if c.is_whitespace() {
                     tokenize(&input[1..])
                 } else {
                     tokenize_const_or_id(input)
                 }
             }
-        },
-        None => Ok(Vec::new()),
+            None => Ok(Vec::new())
+        }
     }
 }
 
